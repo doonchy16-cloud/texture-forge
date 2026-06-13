@@ -1,0 +1,15 @@
+{
+    "geode": "5.7.1",
+    "gd": {
+        "win": "2.2081"
+    },
+    "version": "0.3.19",
+    "id": "doonc.texture-forge",
+    "name": "Texture Forge",
+    "developer": "Doonc",
+    "description": "Windows standalone in-game texture pack builder with staged imports, target selection, safer apply/reset, and portable packs.",
+    "early-load": true,
+    "links": {
+        "source": "local"
+    }
+}
