@@ -10,6 +10,6 @@
     "description": "Windows standalone in-game texture pack builder with staged imports, target selection, safer apply/reset, and portable packs.",
     "early-load": true,
     "links": {
-        "source": "local"
+        "source": "https://github.com/doonchy16-cloud/texture-forge"
     }
 }
