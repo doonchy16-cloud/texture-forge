@@ -1,8 +1,6 @@
 #include "TextureForge/PackManager.hpp"
 #include "TextureForge/ImageProcessor.hpp"
 
-#include <Geode/binding/GameManager.hpp>
-
 namespace textureforge {
 
 std::vector<fs::path> relativeFilesIn(fs::path const& root, std::string const& extension = "") {
@@ -479,12 +477,8 @@ void addSpriteFramesFromPhysicalFiles(
     }
 }
 
-void resetLoadedGeometryDashIcons() {
-    auto* gameManager = GameManager::sharedState();
-    if (!gameManager) return;
-
-    gameManager->resetAllIcons();
-    log::info("Reset Geometry Dash icon cache after Texture Forge resource refresh");
+void noteIconSpriteFramesWereRefreshed() {
+    log::info("Texture Forge refreshed icon sprite frames without changing selected player icons");
 }
 
 void removeTextureKeysFor(CCTextureCache* textureCache, fs::path const& relativePng, fs::path const* appliedRoot) {
@@ -776,7 +770,7 @@ Result<> mountAppliedPack(PackSummary const& pack, bool reload) {
     }
     sLastApplyHadIconReloadWarnings = status.iconSheetsSeen && !status.iconReloadVerified;
     if (status.iconSheetsSeen) {
-        resetLoadedGeometryDashIcons();
+        noteIconSpriteFramesWereRefreshed();
         log::info(
             "Texture Forge icon reload finished: {} sheet(s) verified, warnings={}",
             status.iconSheetsReloaded,
@@ -842,7 +836,7 @@ Result<> resetOverrides(bool reload) {
     if (reload) {
         geode::cocos::reloadTextures();
         auto status = refreshRuntimeCaches(affectedPlists, affectedPngs, nullptr);
-        if (status.iconSheetsSeen) resetLoadedGeometryDashIcons();
+        if (status.iconSheetsSeen) noteIconSpriteFramesWereRefreshed();
     }
     else {
         (void)refreshRuntimeCaches(affectedPlists, affectedPngs, nullptr);

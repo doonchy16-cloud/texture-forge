@@ -2,6 +2,11 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
+## What v0.4.1 does
+
+- Stops using Geometry Dash's `resetAllIcons()` during Apply/Reset, so applying a pack no longer changes your selected cube, ship, ball, UFO, wave, robot, spider, swing, or jetpack back to the first/default icon.
+- Shows zero-based icon resources as normal one-based in-game targets. For example, `player_00` is shown as **Cube 1** instead of being hidden as **Cube 0**.
+
 ## What v0.4.0 does
 
 - Adds one **Texture Forge** button in Geometry Dash's **Advanced Video Options** menu.
@@ -10,7 +15,7 @@ Source for the `doonc.texture-forge` Geode mod.
 - Adds a first in-game **Icon Editor** from the Import page. Pick the pack, press **Icon Editor**, choose the target, draw/edit the texture, save it into the pack, then press **Apply Pack**.
 - The editor includes pencil, eraser, fill, line, rectangle, circle, solid/outline mode, grid toggle, brush size controls, mirror, rotate, copy, paste, undo, redo, size controls, hex color entry, and target-shaped canvases.
 - Saves editor drawings into the pack's `editor/saves` folder so they appear in the import file picker and stay portable with the pack.
-- Shows icon targets with in-game numbering and skips zero-numbered internal resources, so there is no **Cube 0**, **Ship 0**, or other zero-numbered player mode label.
+- Shows icon targets with in-game numbering, mapping zero-based files like `player_00` to normal labels like **Cube 1**.
 - Moves the import preview higher so it no longer sits behind the **Use File** button.
 - Writes imported images into all visible icon plist frames for the chosen icon sheet while leaving vanilla glow/shadow frames intact.
 - Removes exact icon frame names from Geometry Dash's sprite-frame cache before reloading an icon sheet, so frames like `ship_02_001.png` and `player_01_001.png` are replaced immediately instead of staying vanilla.

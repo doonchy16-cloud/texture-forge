@@ -77,6 +77,8 @@ Press **Apply**, then **Apply Pack**, when you want the staged changes to become
 
 Apply also refreshes affected PNG texture caches and icon plist/sprite-frame caches, so changed textures should update without needing to restart the whole game.
 
+Apply does not reset your selected player icons. It refreshes texture data only, so your current cube, ship, ball, UFO, wave, robot, spider, swing, and jetpack selections stay the same.
+
 For non-icon spritesheets, Texture Forge uses a built-in Texture Loader-style fallback so missing frames can come from lower texture packs or vanilla resources. For player icons, Texture Forge uses its own exact icon reload path because Geometry Dash caches icon plist frame names separately.
 
 If you edit a pack that is already active, those edits still stay staged until you press **Apply Pack** again.

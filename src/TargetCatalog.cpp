@@ -76,12 +76,12 @@ TargetCatalog const& targetCatalog() {
         auto addIconGroup = [&](std::string const& label, std::string const& prefix) {
             std::vector<TargetPreset> presets;
             auto numbers = scanIconNumbers(prefix);
+            auto displayOffset = std::find(numbers.begin(), numbers.end(), 0) != numbers.end() ? 1 : 0;
             for (auto number : numbers) {
-                if (number == 0) continue;
-                presets.push_back(iconPreset(label, prefix, number, number));
+                presets.push_back(iconPreset(label, prefix, number, number + displayOffset));
             }
             if (!presets.empty()) {
-                addGroup(label, std::move(presets), std::max(1, numbers.front()), numbers.back());
+                addGroup(label, std::move(presets), numbers.front() + displayOffset, numbers.back() + displayOffset);
             }
         };
 
