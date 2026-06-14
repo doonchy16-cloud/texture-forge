@@ -266,21 +266,33 @@ bool isIconResourceOutput(fs::path const& output) {
     return lowerString(genericPathString(output.parent_path())) == "icons" && lowerString(pathString(output.extension())) == ".png";
 }
 
-bool isReplaceableIconFrame(std::string const& frameKey, std::string const& baseStem) {
+std::optional<std::string> iconFrameTail(std::string const& frameKey, std::string const& baseStem) {
     auto key = lowerString(frameKey);
     auto stem = lowerString(baseStem);
     auto prefix = stem + "_";
 
-    if (!startsWith(key, prefix) || !endsWith(key, ".png")) return false;
+    if (!startsWith(key, prefix) || !endsWith(key, ".png")) return std::nullopt;
 
     auto tail = key.substr(prefix.size(), key.size() - prefix.size() - std::strlen(".png"));
-    if (tail.empty()) return false;
-    if (tail.find("glow") != std::string::npos || tail.find("shadow") != std::string::npos) return false;
+    if (tail.empty()) return std::nullopt;
+    return tail;
+}
+
+bool isPrimaryIconImageFrame(std::string const& frameKey, std::string const& baseStem) {
+    auto tail = iconFrameTail(frameKey, baseStem);
+    if (!tail) return false;
+    if (tail->find("glow") != std::string::npos || tail->find("shadow") != std::string::npos) return false;
+    if (startsWith(*tail, "2_") || tail->find("_2_") != std::string::npos) return false;
     return true;
 }
 
-std::vector<IntRect> parseReplaceableIconFrames(std::string const& plist, std::string const& baseStem) {
-    std::vector<IntRect> frames;
+struct ParsedIconFrames {
+    std::vector<IntRect> primaryFrames;
+    std::vector<IntRect> clearFrames;
+};
+
+ParsedIconFrames parseIconFrames(std::string const& plist, std::string const& baseStem) {
+    ParsedIconFrames frames;
     auto pos = plist.find("<key>frames</key>");
     if (pos == std::string::npos) pos = 0;
 
@@ -293,7 +305,8 @@ std::vector<IntRect> parseReplaceableIconFrames(std::string const& plist, std::s
         auto frameKey = plist.substr(keyTextStart, keyEnd - keyTextStart);
         pos = keyEnd + std::strlen("</key>");
         if (frameKey == "metadata") break;
-        if (!isReplaceableIconFrame(frameKey, baseStem)) continue;
+        auto tail = iconFrameTail(frameKey, baseStem);
+        if (!tail) continue;
 
         auto dictEnd = plist.find("</dict>", pos);
         auto textureKey = plist.find("<key>textureRect</key>", pos);
@@ -303,7 +316,10 @@ std::vector<IntRect> parseReplaceableIconFrames(std::string const& plist, std::s
         stringStart += std::strlen("<string>");
         auto stringEnd = plist.find("</string>", stringStart);
         if (stringEnd == std::string::npos || (dictEnd != std::string::npos && stringEnd > dictEnd)) continue;
-        if (auto rect = parseTextureRect(plist.substr(stringStart, stringEnd - stringStart))) frames.push_back(*rect);
+        if (auto rect = parseTextureRect(plist.substr(stringStart, stringEnd - stringStart))) {
+            frames.clearFrames.push_back(*rect);
+            if (isPrimaryIconImageFrame(frameKey, baseStem)) frames.primaryFrames.push_back(*rect);
+        }
     }
     return frames;
 }
@@ -327,9 +343,59 @@ Result<IconSheetLayout> readIconSheetLayout(fs::path const& output) {
     }
 
     GEODE_UNWRAP_INTO(auto plist, geode::utils::file::readString(originalPlist));
-    auto primaryFrames = parseReplaceableIconFrames(plist, stripScaleSuffix(pathString(output.stem())));
-    if (primaryFrames.empty()) return Err("Unable to find icon frame layout for {}", pathString(output.filename()));
-    return Ok(IconSheetLayout { width, height, originalPng, originalPlist, primaryFrames });
+    auto frames = parseIconFrames(plist, stripScaleSuffix(pathString(output.stem())));
+    if (frames.primaryFrames.empty()) return Err("Unable to find icon frame layout for {}", pathString(output.filename()));
+    return Ok(IconSheetLayout { width, height, originalPng, originalPlist, frames.primaryFrames, frames.clearFrames });
+}
+
+void clearFrame(
+    std::vector<unsigned char>& destination,
+    int destinationWidth,
+    int destinationHeight,
+    IntRect const& frame
+) {
+    auto startX = std::max(0, frame.x);
+    auto startY = std::max(0, frame.y);
+    auto endX = std::min(destinationWidth, frame.x + frame.width);
+    auto endY = std::min(destinationHeight, frame.y + frame.height);
+    if (startX >= endX || startY >= endY) return;
+
+    for (auto y = startY; y < endY; ++y) {
+        for (auto x = startX; x < endX; ++x) {
+            auto* dst = destination.data() + ((y * destinationWidth + x) * 4);
+            dst[0] = 0;
+            dst[1] = 0;
+            dst[2] = 0;
+            dst[3] = 0;
+        }
+    }
+}
+
+void copyFrame(
+    std::vector<unsigned char> const& source,
+    int sourceWidth,
+    int sourceHeight,
+    std::vector<unsigned char>& destination,
+    int destinationWidth,
+    int destinationHeight,
+    IntRect const& frame
+) {
+    auto startX = std::max(0, frame.x);
+    auto startY = std::max(0, frame.y);
+    auto endX = std::min({ sourceWidth, destinationWidth, frame.x + frame.width });
+    auto endY = std::min({ sourceHeight, destinationHeight, frame.y + frame.height });
+    if (startX >= endX || startY >= endY) return;
+
+    for (auto y = startY; y < endY; ++y) {
+        for (auto x = startX; x < endX; ++x) {
+            auto const* src = source.data() + ((y * sourceWidth + x) * 4);
+            auto* dst = destination.data() + ((y * destinationWidth + x) * 4);
+            dst[0] = src[0];
+            dst[1] = src[1];
+            dst[2] = src[2];
+            dst[3] = src[3];
+        }
+    }
 }
 
 void blitFittedImage(
@@ -387,6 +453,9 @@ Result<bool> writeIconTextureIfPossible(fs::path const& source, fs::path const& 
         return Err("Vanilla icon sheet size changed for {}", pathString(output.filename()));
     }
     auto sheet = std::move(originalSheet.rgba);
+    for (auto const& frame : layout.clearFrames) {
+        clearFrame(sheet, layout.width, layout.height, frame);
+    }
     for (auto const& frame : layout.primaryFrames) {
         blitFittedImage(sourceImage.rgba.data(), sourceImage.width, sourceImage.height, sheet, layout.width, layout.height, frame, false);
     }
@@ -401,12 +470,65 @@ Result<bool> writeIconTextureIfPossible(fs::path const& source, fs::path const& 
     fs::copy_file(layout.plistPath, destinationPlist, fs::copy_options::overwrite_existing, ec);
     if (ec) return Err("Unable to copy icon plist: {}", ec.message());
     log::info(
-        "Generated Texture Forge icon sheet {} and plist {} ({} replaceable frame(s))",
+        "Generated Texture Forge icon sheet {} and plist {} ({} image frame(s), {} cleared layer frame(s))",
         normalizedPathString(destination),
         normalizedPathString(destinationPlist),
-        layout.primaryFrames.size()
+        layout.primaryFrames.size(),
+        layout.clearFrames.size()
     );
     return Ok(true);
+}
+
+Result<int> normalizeIconOutputsInRoot(fs::path const& root) {
+    std::error_code ec;
+    if (!fs::exists(root, ec)) return Ok(0);
+
+    auto normalized = 0;
+    for (
+        auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+        it != fs::recursive_directory_iterator();
+        it.increment(ec)
+    ) {
+        if (ec) break;
+        if (!it->is_regular_file(ec)) continue;
+        if (lowerString(pathString(it->path().extension())) != ".png") continue;
+
+        auto relative = fs::relative(it->path(), root, ec);
+        if (ec) continue;
+        relative = fs::path(relative.generic_string());
+        if (!isIconResourceOutput(relative)) continue;
+
+        auto relativePlist = relative;
+        relativePlist.replace_extension(".plist");
+        if (!fs::exists(root / relativePlist, ec) || !fs::exists(resourcePath(relativePlist), ec)) continue;
+
+        GEODE_UNWRAP_INTO(auto layout, readIconSheetLayout(relative));
+        GEODE_UNWRAP_INTO(auto currentSheet, loadImage(it->path()));
+        if (currentSheet.width != layout.width || currentSheet.height != layout.height) {
+            return Err("Pack icon sheet size changed for {}", pathString(relative.filename()));
+        }
+
+        auto originalPixels = currentSheet.rgba;
+        auto normalizedPixels = std::move(currentSheet.rgba);
+        for (auto const& frame : layout.clearFrames) {
+            clearFrame(normalizedPixels, layout.width, layout.height, frame);
+        }
+        for (auto const& frame : layout.primaryFrames) {
+            copyFrame(originalPixels, layout.width, layout.height, normalizedPixels, layout.width, layout.height, frame);
+        }
+
+        if (!stbi_write_png(pathString(it->path()).c_str(), layout.width, layout.height, 4, normalizedPixels.data(), layout.width * 4)) {
+            return Err("Unable to normalize icon PNG: {}", pathString(relative.filename()));
+        }
+        fs::copy_file(layout.plistPath, root / relativePlist, fs::copy_options::overwrite_existing, ec);
+        if (ec) return Err("Unable to refresh icon plist: {}", ec.message());
+        ++normalized;
+    }
+
+    if (normalized > 0) {
+        log::info("Normalized {} Texture Forge icon sheet(s) in {}", normalized, normalizedPathString(root));
+    }
+    return Ok(normalized);
 }
 
 bool isBackgroundTarget(fs::path const& output) {

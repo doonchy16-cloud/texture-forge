@@ -15,6 +15,7 @@ Result<int> importSelectedFileIntoPack(PackSummary const& pack, TargetPreset con
 Result<> applyPack(PackSummary const& pack, bool reload);
 Result<> resetOverrides(bool reload);
 bool lastApplyHadIconReloadWarnings();
+bool activePackOverridesIcon(IconType type, int id);
 void applySavedPackIfAny();
 
 } // namespace textureforge

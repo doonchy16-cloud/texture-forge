@@ -16,6 +16,7 @@ This folder stores built `.geode` packages before they are overwritten by later 
 | 0.3.19 | `doonc.texture-forge-v0.3.19.geode` | Reloads icon sprite frames by exact frame key, remounts the runtime pack after texture reload, and fixes contain-mode image padding. |
 | 0.4.0 | `doonc.texture-forge-v0.4.0.geode` | Adds the first in-game Icon Editor, replaces the logo, and adds built-in Texture Loader-style plist fallback for non-icon spritesheets. |
 | 0.4.1 | `doonc.texture-forge-v0.4.1.geode` | Stops Apply/Reset from calling Geometry Dash's selected-icon reset and maps zero-based icon files to one-based in-game labels. |
+| 0.4.2 | `doonc.texture-forge-v0.4.2.geode` | Clears selected icon color/glow layers, repairs older generated icon sheets on Apply/mount, and de-tints Texture Forge-overridden icon sprites, so custom icon textures are not hidden by normal player-color masks. |
 | 0.3.13 source | `texture-forge-source-v0.3.13-clean.zip` | Clean source export with `src`, `include`, and config/docs only; excludes `build/` and compiled outputs. |
 | 0.3.15 source | `texture-forge-source-v0.3.15-clean.zip` | Clean source export for v0.3.15 with `src`, `include`, and config/docs only; excludes `build/` and compiled outputs. |
 

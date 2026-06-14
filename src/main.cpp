@@ -1,5 +1,8 @@
 #include <Geode/Geode.hpp>
+#include <Geode/binding/GameManager.hpp>
 #include <Geode/modify/MoreVideoOptionsLayer.hpp>
+#include <Geode/modify/PlayerObject.hpp>
+#include <Geode/modify/SimplePlayer.hpp>
 
 #include <cmath>
 
@@ -13,11 +16,183 @@ namespace {
     constexpr auto kApplyFallbackButtonSize = CCSize { 54.f, 30.f };
     constexpr auto kTextureForgeButtonGap = 8.f;
     constexpr auto kTextureForgeLabelScale = .22f;
+    constexpr auto kExactTextureColor = ccColor3B { 255, 255, 255 };
+
+    void forceNodeTreeWhite(CCNode* node) {
+        if (!node) return;
+        if (auto* sprite = typeinfo_cast<CCSprite*>(node)) {
+            sprite->setColor(kExactTextureColor);
+        }
+
+        auto* children = node->getChildren();
+        if (!children) return;
+        for (auto* child : CCArrayExt<CCNode*>(children)) {
+            forceNodeTreeWhite(child);
+        }
+    }
+
+    void forceSimplePlayerTextureColors(SimplePlayer* player) {
+        if (!player) return;
+        forceNodeTreeWhite(player->m_firstLayer);
+        forceNodeTreeWhite(player->m_secondLayer);
+        forceNodeTreeWhite(player->m_birdDome);
+        forceNodeTreeWhite(player->m_outlineSprite);
+        forceNodeTreeWhite(player->m_detailSprite);
+        forceNodeTreeWhite(player->m_robotSprite);
+        forceNodeTreeWhite(player->m_spiderSprite);
+    }
+
+    void forcePlayerObjectTextureColors(PlayerObject* player) {
+        if (!player) return;
+        forceNodeTreeWhite(player->m_iconSprite);
+        forceNodeTreeWhite(player->m_iconSpriteSecondary);
+        forceNodeTreeWhite(player->m_iconSpriteWhitener);
+        forceNodeTreeWhite(player->m_iconGlow);
+        forceNodeTreeWhite(player->m_vehicleSprite);
+        forceNodeTreeWhite(player->m_vehicleSpriteSecondary);
+        forceNodeTreeWhite(player->m_birdVehicle);
+        forceNodeTreeWhite(player->m_vehicleSpriteWhitener);
+        forceNodeTreeWhite(player->m_vehicleGlow);
+        forceNodeTreeWhite(player->m_robotSprite);
+        forceNodeTreeWhite(player->m_spiderSprite);
+    }
+
+    bool activeManagerIconOverride(IconType type) {
+        auto* manager = GameManager::get();
+        if (!manager) return false;
+
+        switch (type) {
+            case IconType::Cube: return textureforge::activePackOverridesIcon(type, manager->getPlayerFrame());
+            case IconType::Ship: return textureforge::activePackOverridesIcon(type, manager->getPlayerShip());
+            case IconType::Ball: return textureforge::activePackOverridesIcon(type, manager->getPlayerBall());
+            case IconType::Ufo: return textureforge::activePackOverridesIcon(type, manager->getPlayerBird());
+            case IconType::Wave: return textureforge::activePackOverridesIcon(type, manager->getPlayerDart());
+            case IconType::Robot: return textureforge::activePackOverridesIcon(type, manager->getPlayerRobot());
+            case IconType::Spider: return textureforge::activePackOverridesIcon(type, manager->getPlayerSpider());
+            case IconType::Swing: return textureforge::activePackOverridesIcon(type, manager->getPlayerSwing());
+            case IconType::Jetpack: return textureforge::activePackOverridesIcon(type, manager->getPlayerJetpack());
+            default: return false;
+        }
+    }
 }
 
 $on_mod(Loaded) {
     textureforge::applySavedPackIfAny();
 }
+
+class $modify(TextureForgeSimplePlayer, SimplePlayer) {
+    struct Fields {
+        bool m_textureForgeExactIcon = false;
+    };
+
+    void updatePlayerFrame(int id, IconType type) {
+        SimplePlayer::updatePlayerFrame(id, type);
+        m_fields->m_textureForgeExactIcon = textureforge::activePackOverridesIcon(type, id);
+        if (m_fields->m_textureForgeExactIcon) {
+            forceSimplePlayerTextureColors(this);
+        }
+    }
+
+    void updateColors() {
+        SimplePlayer::updateColors();
+        if (m_fields->m_textureForgeExactIcon) {
+            forceSimplePlayerTextureColors(this);
+        }
+    }
+
+    void setColor(ccColor3B const& color) {
+        SimplePlayer::setColor(m_fields->m_textureForgeExactIcon ? kExactTextureColor : color);
+        if (m_fields->m_textureForgeExactIcon) {
+            forceSimplePlayerTextureColors(this);
+        }
+    }
+};
+
+class $modify(TextureForgePlayerObject, PlayerObject) {
+    struct Fields {
+        bool m_cubeTextureForge = false;
+        bool m_shipTextureForge = false;
+        bool m_ballTextureForge = false;
+        bool m_ufoTextureForge = false;
+        bool m_waveTextureForge = false;
+        bool m_swingTextureForge = false;
+        bool m_jetpackTextureForge = false;
+    };
+
+    bool currentModeUsesTextureForgeIcon() {
+        if (m_isShip) return m_fields->m_shipTextureForge;
+        if (m_isBird) return m_fields->m_ufoTextureForge;
+        if (m_isBall) return m_fields->m_ballTextureForge;
+        if (m_isDart) return m_fields->m_waveTextureForge;
+        if (m_isSwing) return m_fields->m_swingTextureForge;
+        if (m_isRobot) return activeManagerIconOverride(IconType::Robot);
+        if (m_isSpider) return activeManagerIconOverride(IconType::Spider);
+        return m_fields->m_cubeTextureForge || (m_defaultMiniIcon && m_fields->m_jetpackTextureForge);
+    }
+
+    void refreshTextureForgeColors() {
+        if (currentModeUsesTextureForgeIcon()) {
+            forcePlayerObjectTextureColors(this);
+        }
+    }
+
+    void update(float dt) {
+        PlayerObject::update(dt);
+        refreshTextureForgeColors();
+    }
+
+    void setColor(ccColor3B const& color) {
+        PlayerObject::setColor(currentModeUsesTextureForgeIcon() ? kExactTextureColor : color);
+        refreshTextureForgeColors();
+    }
+
+    void setSecondColor(ccColor3B const& color) {
+        PlayerObject::setSecondColor(currentModeUsesTextureForgeIcon() ? kExactTextureColor : color);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerFrame(int frame) {
+        PlayerObject::updatePlayerFrame(frame);
+        m_fields->m_cubeTextureForge = textureforge::activePackOverridesIcon(IconType::Cube, frame);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerShipFrame(int frame) {
+        PlayerObject::updatePlayerShipFrame(frame);
+        m_fields->m_shipTextureForge = textureforge::activePackOverridesIcon(IconType::Ship, frame);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerRollFrame(int frame) {
+        PlayerObject::updatePlayerRollFrame(frame);
+        m_fields->m_ballTextureForge = textureforge::activePackOverridesIcon(IconType::Ball, frame);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerBirdFrame(int frame) {
+        PlayerObject::updatePlayerBirdFrame(frame);
+        m_fields->m_ufoTextureForge = textureforge::activePackOverridesIcon(IconType::Ufo, frame);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerDartFrame(int frame) {
+        PlayerObject::updatePlayerDartFrame(frame);
+        m_fields->m_waveTextureForge = textureforge::activePackOverridesIcon(IconType::Wave, frame);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerSwingFrame(int frame) {
+        PlayerObject::updatePlayerSwingFrame(frame);
+        m_fields->m_swingTextureForge = textureforge::activePackOverridesIcon(IconType::Swing, frame);
+        refreshTextureForgeColors();
+    }
+
+    void updatePlayerJetpackFrame(int frame) {
+        PlayerObject::updatePlayerJetpackFrame(frame);
+        m_fields->m_jetpackTextureForge = textureforge::activePackOverridesIcon(IconType::Jetpack, frame);
+        refreshTextureForgeColors();
+    }
+};
 
 class $modify(TextureForgeMoreVideoOptionsLayer, MoreVideoOptionsLayer) {
     static void onModify(auto& self) {

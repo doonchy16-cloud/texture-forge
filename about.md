@@ -79,6 +79,8 @@ Apply also refreshes affected PNG texture caches and icon plist/sprite-frame cac
 
 Apply does not reset your selected player icons. It refreshes texture data only, so your current cube, ship, ball, UFO, wave, robot, spider, swing, and jetpack selections stay the same.
 
+For player icon targets, Texture Forge draws the imported image as real icon art. It clears the selected icon's extra Geometry Dash color/glow helper layers in the generated sheet before drawing the image into the primary frame, so normal player colors do not hide the texture. Apply and startup mounting also repair older Texture Forge icon sheets by keeping the imported primary image and clearing old helper layers. Texture Forge also forces overridden garage previews, icon-grid previews, and exposed in-level player icon sprites to render white so the chosen image is not tinted by your selected player colors. Other icons in that sheet remain unchanged.
+
 For non-icon spritesheets, Texture Forge uses a built-in Texture Loader-style fallback so missing frames can come from lower texture packs or vanilla resources. For player icons, Texture Forge uses its own exact icon reload path because Geometry Dash caches icon plist frame names separately.
 
 If you edit a pack that is already active, those edits still stay staged until you press **Apply Pack** again.

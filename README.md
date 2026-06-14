@@ -2,6 +2,13 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
+## What v0.4.2 does
+
+- Fixes custom icon apply behavior by clearing the selected icon's Geometry Dash color/glow helper layers before drawing the imported image into the icon's primary frame(s). This makes photo-style imports show as real textures instead of being hidden by the normal player-color mask.
+- Repairs older Texture Forge icon sheets during Apply/startup mount by keeping the already-imported primary image and clearing the old secondary/glow/helper layers.
+- Normalizes Texture Forge-overridden icon sprites to white at runtime, so the garage preview, icon grid, and exposed in-level player icons do not tint custom icon images green, blue, or other selected player colors.
+- Keeps unrelated icons in the same sheet untouched, so changing Cube 1 does not blank or rewrite Cube 2, Ship 1, or other icon sheets.
+
 ## What v0.4.1 does
 
 - Stops using Geometry Dash's `resetAllIcons()` during Apply/Reset, so applying a pack no longer changes your selected cube, ship, ball, UFO, wave, robot, spider, swing, or jetpack back to the first/default icon.
@@ -17,7 +24,7 @@ Source for the `doonc.texture-forge` Geode mod.
 - Saves editor drawings into the pack's `editor/saves` folder so they appear in the import file picker and stay portable with the pack.
 - Shows icon targets with in-game numbering, mapping zero-based files like `player_00` to normal labels like **Cube 1**.
 - Moves the import preview higher so it no longer sits behind the **Use File** button.
-- Writes imported images into all visible icon plist frames for the chosen icon sheet while leaving vanilla glow/shadow frames intact.
+- Writes imported images into the chosen icon sheet while clearing that selected icon's extra color/glow helper frames, so the imported art is not covered by Geometry Dash's normal recolor layers.
 - Removes exact icon frame names from Geometry Dash's sprite-frame cache before reloading an icon sheet, so frames like `ship_02_001.png` and `player_01_001.png` are replaced immediately instead of staying vanilla.
 - Verifies sampled icon frame names after reload and warns if the game needs a restart to pick up the changed icon sheet.
 - Keeps contain-mode image imports inside the fitted rectangle instead of stretching edge pixels into the padding area.

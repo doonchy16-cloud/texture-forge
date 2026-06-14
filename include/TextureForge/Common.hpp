@@ -70,6 +70,7 @@ struct IconSheetLayout {
     fs::path pngPath;
     fs::path plistPath;
     std::vector<IntRect> primaryFrames;
+    std::vector<IntRect> clearFrames;
 };
 
 struct ImageData {

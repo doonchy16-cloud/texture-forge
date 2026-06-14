@@ -553,6 +553,43 @@ std::optional<PackSummary> activeRuntimePack() {
     return std::nullopt;
 }
 
+std::optional<std::string> iconPrefixForType(IconType type) {
+    switch (type) {
+        case IconType::Cube: return "player";
+        case IconType::Ship: return "ship";
+        case IconType::Ball: return "player_ball";
+        case IconType::Ufo: return "bird";
+        case IconType::Wave: return "dart";
+        case IconType::Robot: return "robot";
+        case IconType::Spider: return "spider";
+        case IconType::Swing: return "swing";
+        case IconType::Jetpack: return "jetpack";
+        default: return std::nullopt;
+    }
+}
+
+int iconResourceNumberForType(IconType type, int id) {
+    if (type == IconType::Cube || type == IconType::Ball) return std::max(0, id - 1);
+    return std::max(1, id);
+}
+
+bool activePackOverridesIcon(IconType type, int id) {
+    auto prefix = iconPrefixForType(type);
+    if (!prefix) return false;
+
+    auto pack = activeRuntimePack();
+    if (!pack) return false;
+
+    auto number = iconResourceNumberForType(type, id);
+    auto appliedRoot = appliedResourcesDir(*pack);
+    std::error_code ec;
+    for (auto suffix : { "", "-hd", "-uhd" }) {
+        auto relative = fs::path("icons") / fmt::format("{}_{}{}.png", *prefix, iconID(number), suffix);
+        if (fs::exists(appliedRoot / relative, ec)) return true;
+    }
+    return false;
+}
+
 std::string packJson(std::string const& id, std::string const& name) {
     auto json = matjson::Value::object();
     json["textureforge"] = kPackSchema;
@@ -744,6 +781,7 @@ Result<> installRuntimeTexturePack(PackSummary const& pack) {
 Result<> mountAppliedPack(PackSummary const& pack, bool reload) {
     auto appliedRoot = appliedResourcesDir(pack);
     GEODE_UNWRAP(ensureDir(appliedRoot));
+    GEODE_UNWRAP(normalizeIconOutputsInRoot(appliedRoot));
     auto affectedPlists = relativePlistsIn(appliedRoot);
     auto affectedPngs = relativePngsIn(appliedRoot);
     auto affectedFiles = relativeFilesIn(appliedRoot);
@@ -782,7 +820,9 @@ Result<> mountAppliedPack(PackSummary const& pack, bool reload) {
 
 Result<> applyPack(PackSummary const& pack, bool reload) {
     sLastApplyHadIconReloadWarnings = false;
+    GEODE_UNWRAP(normalizeIconOutputsInRoot(stagedResourcesDir(pack)));
     GEODE_UNWRAP(commitStagedResources(pack));
+    GEODE_UNWRAP(normalizeIconOutputsInRoot(appliedResourcesDir(pack)));
     return mountAppliedPack(pack, reload);
 }
 
