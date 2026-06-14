@@ -2,11 +2,14 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
-## What v0.3.19 does
+## What v0.4.0 does
 
 - Adds one **Texture Forge** button in Geometry Dash's **Advanced Video Options** menu.
 - Styles the Advanced-menu Texture Forge button like Geometry Dash's gray **Apply** button, measuring against the real Apply button at runtime so it uses the same compact size and baseline.
 - Adds an Advanced-menu info button just above the upper-left edge of the Texture Forge button that explains what Texture Forge does and why the normal **Textures** button is not part of this mod.
+- Adds a first in-game **Icon Editor** from the Import page. Pick the pack, press **Icon Editor**, choose the target, draw/edit the texture, save it into the pack, then press **Apply Pack**.
+- The editor includes pencil, eraser, fill, line, rectangle, circle, solid/outline mode, grid toggle, brush size controls, mirror, rotate, copy, paste, undo, redo, size controls, hex color entry, and target-shaped canvases.
+- Saves editor drawings into the pack's `editor/saves` folder so they appear in the import file picker and stay portable with the pack.
 - Shows icon targets with in-game numbering and skips zero-numbered internal resources, so there is no **Cube 0**, **Ship 0**, or other zero-numbered player mode label.
 - Moves the import preview higher so it no longer sits behind the **Use File** button.
 - Writes imported images into all visible icon plist frames for the chosen icon sheet while leaving vanilla glow/shadow frames intact.
@@ -14,6 +17,7 @@ Source for the `doonc.texture-forge` Geode mod.
 - Verifies sampled icon frame names after reload and warns if the game needs a restart to pick up the changed icon sheet.
 - Keeps contain-mode image imports inside the fitted rectangle instead of stretching edge pixels into the padding area.
 - Mounts the active texture pack first, reloads Geometry Dash textures, then refreshes affected PNG and icon plist/sprite-frame caches from the exact physical pack files.
+- Adds built-in Texture Loader-style plist stacking for non-icon spritesheets, so partial non-icon sheets can fall back through lower packs and vanilla resources without making Texture Loader a dependency.
 - Logs every generated icon PNG/plist pair and every refreshed sprite-frame plist so icon apply problems can be traced in `geode/latest.log`.
 - Mounts the active pack's `resources/icons` folder too, so Geometry Dash icon sheets resolve when the game asks for `player_00.png` instead of `icons/player_00.png`.
 - Shows a success toast after **Apply Pack** so it is clear the click was handled.
@@ -40,8 +44,8 @@ Source for the `doonc.texture-forge` Geode mod.
 3. Press **Texture Forge**.
 4. Create or select a pack.
 5. Press **Import Files** or **Open Folder** and place PNG/JPG/JPEG files in that pack's `imports` folder.
-6. Use the file arrows to choose the exact file.
-7. Confirm whether image backgrounds should be removed.
+6. Use the file arrows to choose the exact file, or press **Icon Editor** and choose a target before drawing a new texture.
+7. Confirm whether image backgrounds should be removed for imported images.
 8. Choose a target category and target.
 9. Press **Apply Pack** when ready.
 
@@ -53,6 +57,7 @@ Each pack is self-contained:
 
 - `pack.json` describes the pack.
 - `imports` is the inbox for new files.
+- `editor/saves` stores drawings made in the in-game editor.
 - `sources` stores copied originals so the pack remains portable.
 - `staged` contains uncommitted generated Geometry Dash resource overrides.
 - `resources` contains the last applied Geometry Dash resource overrides.

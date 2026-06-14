@@ -631,19 +631,21 @@ std::vector<PackSummary> scanPacks() {
 }
 std::vector<fs::path> importFiles(PackSummary const& pack) {
     std::vector<fs::path> files;
-    auto dir = pack.path / "imports";
     std::error_code ec;
-    if (!fs::exists(dir, ec)) {
-        (void)ensureDir(dir);
-        return files;
-    }
+    for (auto const& dir : { pack.path / "imports", pack.path / "editor" / "saves" }) {
+        if (!fs::exists(dir, ec)) {
+            (void)ensureDir(dir);
+            continue;
+        }
 
-    for (auto const& entry : fs::directory_iterator(dir, fs::directory_options::skip_permission_denied, ec)) {
-        if (entry.is_regular_file(ec) && isSupportedImport(entry.path())) {
-            files.push_back(entry.path());
+        for (auto const& entry : fs::directory_iterator(dir, fs::directory_options::skip_permission_denied, ec)) {
+            if (entry.is_regular_file(ec) && isSupportedImport(entry.path())) {
+                files.push_back(entry.path());
+            }
         }
     }
     std::sort(files.begin(), files.end());
+    files.erase(std::unique(files.begin(), files.end()), files.end());
     return files;
 }
 

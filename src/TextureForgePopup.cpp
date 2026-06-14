@@ -1,6 +1,7 @@
 #include "TextureForge/TextureForgePopup.hpp"
 
 #include "TextureForge/ArchiveManager.hpp"
+#include "TextureForge/IconEditorPopup.hpp"
 #include "TextureForge/PackManager.hpp"
 #include "TextureForge/TargetCatalog.hpp"
 
@@ -57,6 +58,7 @@ protected:
     std::optional<fs::path> m_pendingFile;
     bool m_pendingRemoveBackground = false;
     bool m_renaming = false;
+    bool m_editorTargetMode = false;
     std::string m_renameDraft;
 
     bool init() {
@@ -257,6 +259,7 @@ protected:
 
     void showImport() {
         clearPage(Page::Import);
+        m_editorTargetMode = false;
         addBackButton();
         addText("Import", .52f, { m_size.width / 2.f, 212.f }, "goldFont.fnt");
         addPackStatus(184.f);
@@ -266,15 +269,20 @@ protected:
         addButton("Use File", menu_selector(TextureForgePopup::onPickFile), 118.f, { 210.f, 92.f }, "GJ_button_02.png");
         addButton(">", menu_selector(TextureForgePopup::onNextImportFile), 42.f, { 358.f, 92.f }, "GJ_button_04.png");
         addButton("Open Folder", menu_selector(TextureForgePopup::onOpenImport), 126.f, { 115.f, 48.f }, "GJ_button_04.png");
-        addButton("Choose Target", menu_selector(TextureForgePopup::onTargetsPage), 150.f, { 305.f, 48.f }, "GJ_button_01.png");
+        addButton("Icon Editor", menu_selector(TextureForgePopup::onEditorTargetPage), 150.f, { 305.f, 48.f }, "GJ_button_01.png");
     }
 
     void showTargets() {
         clearPage(Page::Targets);
         constexpr auto perPage = 9;
         addBackButton();
-        addText("Choose Target", .48f, { m_size.width / 2.f, 214.f }, "goldFont.fnt");
-        addSelectedFileStatus(192.f);
+        addText(m_editorTargetMode ? "Edit Target" : "Choose Target", .48f, { m_size.width / 2.f, 214.f }, "goldFont.fnt");
+        if (m_editorTargetMode) {
+            addText("Pick what this editor PNG should be made for.", .24f, { m_size.width / 2.f, 192.f }, "chatFont.fnt", 330.f);
+        }
+        else {
+            addSelectedFileStatus(192.f);
+        }
 
         auto const& group = activeTargetGroup();
         clampTargetPage();
@@ -419,7 +427,7 @@ public:
         return nullptr;
     }
 
-    void onHome(CCObject*) { m_renaming = false; showHome(); }
+    void onHome(CCObject*) { m_renaming = false; m_editorTargetMode = false; showHome(); }
     void onPacksPage(CCObject*) { showPacks(); }
     void onImportPage(CCObject*) { showImport(); }
     void onApplyPage(CCObject*) { showApply(); }
@@ -427,11 +435,21 @@ public:
     void onOverridesPage(CCObject*) { showOverrides(); }
 
     void onTargetsPage(CCObject*) {
+        m_editorTargetMode = false;
         if (!m_pendingFile) {
             toast("Pick a file first", NotificationIcon::Warning);
             showImport();
             return;
         }
+        showTargets();
+    }
+
+    void onEditorTargetPage(CCObject*) {
+        if (!activePack()) {
+            toast("Create a pack first", NotificationIcon::Warning);
+            return;
+        }
+        m_editorTargetMode = true;
         showTargets();
     }
 
@@ -693,6 +711,32 @@ public:
         auto index = clampIndex(static_cast<CCNode*>(sender)->getTag(), targetPresets().size());
         m_targetIndex = index;
         saveState();
+
+        if (m_editorTargetMode) {
+            auto* pack = activePack();
+            if (!pack) {
+                toast("Create a pack first", NotificationIcon::Warning);
+                return;
+            }
+            auto selectedPack = *pack;
+            auto selectedTarget = activeTarget();
+            openIconEditor(selectedPack, selectedTarget, [this, selectedPack, selectedTarget](fs::path const& savedFile) {
+                m_packIndex = clampIndex(m_packIndex, m_packs.size());
+                m_targetIndex = clampIndex(m_targetIndex, targetPresets().size());
+                auto result = importSelectedFileIntoPack(selectedPack, selectedTarget, savedFile, false);
+                if (!result) {
+                    toast(result.unwrapErr(), NotificationIcon::Error);
+                    return;
+                }
+                m_pendingFile = savedFile;
+                m_pendingRemoveBackground = false;
+                m_editorTargetMode = false;
+                toast(fmt::format("Staged editor PNG for {}", selectedTarget.label), NotificationIcon::Success);
+                refreshPacks();
+                showApply();
+            });
+            return;
+        }
 
         if (selectedTargetIsRaw()) {
             createQuickPopup(

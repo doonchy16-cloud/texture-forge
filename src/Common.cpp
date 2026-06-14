@@ -148,6 +148,7 @@ Result<> ensurePackFolders(PackSummary const& pack) {
     GEODE_UNWRAP(ensureDir(appliedResourcesDir(pack)));
     GEODE_UNWRAP(ensureDir(stagedResourcesDir(pack)));
     GEODE_UNWRAP(ensureDir(pack.path / "imports"));
+    GEODE_UNWRAP(ensureDir(pack.path / "editor" / "saves"));
     GEODE_UNWRAP(ensureDir(pack.path / "sources"));
     if (!hasStagedDirtyMarker(pack) && !directoryHasFiles(stagedResourcesDir(pack)) && directoryHasFiles(appliedResourcesDir(pack))) {
         GEODE_UNWRAP(copyDirectoryContents(appliedResourcesDir(pack), stagedResourcesDir(pack)));
