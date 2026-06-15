@@ -2,6 +2,11 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
+## What v0.4.9 does
+
+- Adds a narrow `GameManager::loadIcon` bridge for icon sheets after the active pack is mounted. It still resolves through Geode's texture-pack search path, but now returns the custom icon texture when Geometry Dash asks for the icon sheet.
+- Handles Geometry Dash's raw zero-based cube/ball resource IDs as well as the one-based icon numbers shown in the Texture Forge UI.
+
 ## What v0.4.8 does
 
 - Uses the same core loading path as Texture Loader: the active pack's `resources` directory is mounted through Geode's `CCFileUtils::addTexturePack`.

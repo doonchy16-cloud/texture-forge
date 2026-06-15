@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/binding/GameManager.hpp>
+#include <Geode/modify/GameManager.hpp>
 #include <Geode/modify/MoreVideoOptionsLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/SimplePlayer.hpp>
@@ -79,6 +80,17 @@ namespace {
 $on_mod(Loaded) {
     textureforge::applySavedPackIfAny();
 }
+
+class $modify(TextureForgeGameManager, GameManager) {
+    cocos2d::CCTexture2D* loadIcon(int id, int type, int requestID) {
+        auto* baseTexture = GameManager::loadIcon(id, type, requestID);
+        auto iconType = static_cast<IconType>(type);
+        if (auto* texture = textureforge::loadActiveIconTexture(iconType, id)) {
+            return texture;
+        }
+        return baseTexture;
+    }
+};
 
 class $modify(TextureForgeSimplePlayer, SimplePlayer) {
     struct Fields {

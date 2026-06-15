@@ -19,6 +19,7 @@ bool activePackOverridesIcon(IconType type, int id);
 bool refreshActiveIconOverride(IconType type, int id);
 bool refreshIconOverrideForFrameName(std::string const& frameName);
 bool iconFrameReloadInProgress();
+cocos2d::CCTexture2D* loadActiveIconTexture(IconType type, int id);
 void applySavedPackIfAny();
 
 } // namespace textureforge

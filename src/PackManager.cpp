@@ -69,6 +69,7 @@ bool sActiveIconOverrideCacheReady = false;
 std::optional<fs::path> sActiveAppliedRoot;
 std::unordered_set<std::string> sActiveIconOverrideKeys;
 std::unordered_set<std::string> sLoadedIconSheetKeys;
+std::unordered_set<std::string> sLoggedIconTextureHits;
 
 struct IconFrameReloadGuard {
     bool m_previous = false;
@@ -88,6 +89,10 @@ bool iconFrameReloadInProgress() {
 
 void clearLoadedIconSheetCache() {
     sLoadedIconSheetKeys.clear();
+}
+
+void clearLoggedIconTextureHits() {
+    sLoggedIconTextureHits.clear();
 }
 
 std::string textureQualitySuffix() {
@@ -726,6 +731,7 @@ void clearActiveIconOverrideCache(bool ready = false) {
     sActiveAppliedRoot.reset();
     sActiveIconOverrideCacheReady = ready;
     clearLoadedIconSheetCache();
+    clearLoggedIconTextureHits();
 }
 
 void rebuildActiveIconOverrideCache(PackSummary const& pack) {
@@ -820,6 +826,105 @@ bool refreshIconOverrideForFrameName(std::string const& frameName) {
     if (!activePackOverridesIcon(target->type, target->id)) return false;
 
     return refreshActiveIconOverride(target->type, target->id);
+}
+
+std::vector<int> iconResourceNumberCandidatesForLoadIcon(IconType type, int id) {
+    std::vector<int> candidates;
+    auto add = [&](int value) {
+        if (value < 0) return;
+        if (std::find(candidates.begin(), candidates.end(), value) == candidates.end()) {
+            candidates.push_back(value);
+        }
+    };
+
+    // GameManager::loadIcon often receives the raw resource sheet number. Cubes
+    // and balls are displayed as one-based in game but stored as player_00,
+    // player_ball_00, etc., so also try the friendly in-game mapping.
+    add(id);
+    add(iconResourceNumberForType(type, id));
+    if (type == IconType::Cube || type == IconType::Ball) {
+        add(id - 1);
+        add(id + 1);
+    }
+    return candidates;
+}
+
+cocos2d::CCTexture2D* loadActiveIconTexture(IconType type, int id) {
+    auto prefix = iconPrefixForType(type);
+    if (!prefix) return nullptr;
+
+    ensureActiveIconOverrideCache();
+    if (!sActiveAppliedRoot) return nullptr;
+
+    auto* textureCache = CCTextureCache::get();
+    if (!textureCache) return nullptr;
+
+    std::error_code ec;
+    for (auto resourceNumber : iconResourceNumberCandidatesForLoadIcon(type, id)) {
+        auto logicalPlist = fs::path("icons") / fmt::format("{}_{}.plist", *prefix, iconID(resourceNumber));
+        auto logicalPng = logicalPlist;
+        logicalPng.replace_extension(".png");
+        auto logicalKey = iconOverrideKey(type, type == IconType::Cube || type == IconType::Ball ? resourceNumber + 1 : resourceNumber);
+        auto hasOverrideKey = sActiveIconOverrideKeys.contains(logicalKey);
+
+        auto hasAnyVariant = false;
+        for (auto const& candidatePlist : qualityPlistVariantsFor(logicalPlist)) {
+            auto candidatePng = candidatePlist;
+            candidatePng.replace_extension(".png");
+            if (fs::exists(*sActiveAppliedRoot / candidatePlist, ec) && fs::exists(*sActiveAppliedRoot / candidatePng, ec)) {
+                hasAnyVariant = true;
+                break;
+            }
+        }
+        if (!hasAnyVariant && !hasOverrideKey) continue;
+
+        if (!iconSheetIsLoaded(*sActiveAppliedRoot, logicalPlist)) {
+            auto status = reloadIconSpriteFramesFromRoot(*sActiveAppliedRoot, sActiveAppliedRoot ? &*sActiveAppliedRoot : nullptr, { logicalPlist });
+            if (status.iconSheetsSeen && status.iconReloadVerified && status.iconSheetsReloaded > 0) {
+                markIconSheetLoaded(*sActiveAppliedRoot, logicalPlist);
+            }
+        }
+
+        std::vector<fs::path> candidates { qualityPngFor(logicalPlist) };
+        auto variants = qualityPngVariantsFor(logicalPlist);
+        candidates.insert(candidates.end(), variants.begin(), variants.end());
+        candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+
+        for (auto const& candidate : candidates) {
+            auto physical = *sActiveAppliedRoot / candidate;
+            if (!fs::exists(physical, ec)) continue;
+
+            auto logicalLookup = genericPathString(candidate);
+            auto physicalLookup = normalizedPathString(physical);
+
+            // The original loadIcon may already have cached the vanilla texture
+            // under the logical icon filename. Remove those keys, then load
+            // through CCFileUtils first so this follows the same search-path
+            // mechanism as Texture Loader.
+            removeTextureKeysFor(textureCache, candidate, sActiveAppliedRoot ? &*sActiveAppliedRoot : nullptr);
+            auto* texture = textureCache->addImage(logicalLookup.c_str(), false);
+            if (!texture) {
+                texture = textureCache->addImage(physicalLookup.c_str(), false);
+            }
+            if (!texture) continue;
+
+            auto logKey = fmt::format("{}:{}:{}", static_cast<int>(type), id, genericPathString(candidate));
+            if (sLoggedIconTextureHits.insert(logKey).second) {
+                auto size = texture->getContentSizeInPixels();
+                log::info(
+                    "Texture Forge served GameManager icon texture type={} id={} resource={} from {} ({}x{})",
+                    static_cast<int>(type),
+                    id,
+                    resourceNumber,
+                    physicalLookup,
+                    size.width,
+                    size.height
+                );
+            }
+            return texture;
+        }
+    }
+    return nullptr;
 }
 
 std::string packJson(std::string const& id, std::string const& name) {
