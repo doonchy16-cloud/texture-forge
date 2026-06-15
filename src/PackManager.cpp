@@ -65,6 +65,10 @@ struct RuntimeRefreshStatus {
 
 bool sLastApplyHadIconReloadWarnings = false;
 bool sIconFrameReloadInProgress = false;
+bool sActiveIconOverrideCacheReady = false;
+std::optional<fs::path> sActiveAppliedRoot;
+std::unordered_set<std::string> sActiveIconOverrideKeys;
+std::unordered_set<std::string> sLoadedIconSheetKeys;
 
 struct IconFrameReloadGuard {
     bool m_previous = false;
@@ -80,6 +84,10 @@ struct IconFrameReloadGuard {
 
 bool iconFrameReloadInProgress() {
     return sIconFrameReloadInProgress;
+}
+
+void clearLoadedIconSheetCache() {
+    sLoadedIconSheetKeys.clear();
 }
 
 std::string textureQualitySuffix() {
@@ -153,6 +161,24 @@ std::vector<fs::path> logicalIconBasePlists(std::vector<fs::path> const& relativ
     std::sort(bases.begin(), bases.end());
     bases.erase(std::unique(bases.begin(), bases.end()), bases.end());
     return bases;
+}
+
+std::string iconSheetCacheKey(fs::path const& root, fs::path const& logicalBasePlist) {
+    return normalizedPathString(root) + "|" + genericPathString(logicalBasePlist);
+}
+
+void markIconSheetLoaded(fs::path const& root, fs::path const& logicalBasePlist) {
+    sLoadedIconSheetKeys.insert(iconSheetCacheKey(root, logicalBasePlist));
+}
+
+void markLoadedIconSheets(fs::path const& root, std::vector<fs::path> const& relativePlists) {
+    for (auto const& base : logicalIconBasePlists(relativePlists)) {
+        markIconSheetLoaded(root, base);
+    }
+}
+
+bool iconSheetIsLoaded(fs::path const& root, fs::path const& logicalBasePlist) {
+    return sLoadedIconSheetKeys.contains(iconSheetCacheKey(root, logicalBasePlist));
 }
 
 std::vector<fs::path> nonIconPlists(std::vector<fs::path> const& relativePlists) {
@@ -402,6 +428,7 @@ void clearIconSpriteFramesFromRoot(
             removed,
             genericPathString(base)
         );
+        sLoadedIconSheetKeys.erase(iconSheetCacheKey(root, base));
     }
 }
 
@@ -554,6 +581,9 @@ RuntimeRefreshStatus refreshRuntimeCaches(
     status.iconSheetsSeen = iconStatus.iconSheetsSeen;
     status.iconReloadVerified = iconStatus.iconReloadVerified;
     status.iconSheetsReloaded = iconStatus.iconSheetsReloaded;
+    if (iconStatus.iconReloadVerified) {
+        markLoadedIconSheets(root, relativePlists);
+    }
     return status;
 }
 
@@ -645,33 +675,117 @@ int iconResourceNumberForType(IconType type, int id) {
     return std::max(1, id);
 }
 
-bool activePackOverridesIcon(IconType type, int id) {
-    auto prefix = iconPrefixForType(type);
-    if (!prefix) return false;
+std::string iconOverrideKey(IconType type, int id) {
+    return fmt::format("{}:{}", static_cast<int>(type), id);
+}
 
-    auto pack = activeRuntimePack();
-    if (!pack) return false;
+std::optional<IconFrameTarget> iconTargetForSheetStem(std::string stem) {
+    stem = stripScaleSuffix(lowerString(std::move(stem)));
 
-    auto number = iconResourceNumberForType(type, id);
-    auto appliedRoot = appliedResourcesDir(*pack);
-    std::error_code ec;
-    for (auto suffix : { "", "-hd", "-uhd" }) {
-        auto relative = fs::path("icons") / fmt::format("{}_{}{}.png", *prefix, iconID(number), suffix);
-        if (fs::exists(appliedRoot / relative, ec)) return true;
+    auto const mappings = std::array<std::pair<std::string_view, IconType>, 9> {
+        std::pair { "player_ball", IconType::Ball },
+        std::pair { "jetpack", IconType::Jetpack },
+        std::pair { "player", IconType::Cube },
+        std::pair { "spider", IconType::Spider },
+        std::pair { "robot", IconType::Robot },
+        std::pair { "swing", IconType::Swing },
+        std::pair { "ship", IconType::Ship },
+        std::pair { "bird", IconType::Ufo },
+        std::pair { "dart", IconType::Wave },
+    };
+
+    for (auto const& [prefix, type] : mappings) {
+        auto prefixText = std::string(prefix) + "_";
+        if (!startsWith(stem, prefixText)) continue;
+
+        auto numberText = stem.substr(prefixText.size());
+        if (numberText.empty() || !std::all_of(numberText.begin(), numberText.end(), [](unsigned char c) {
+            return std::isdigit(c);
+        })) {
+            return std::nullopt;
+        }
+
+        auto resourceNumber = 0;
+        try {
+            resourceNumber = std::stoi(numberText);
+        }
+        catch (...) {
+            return std::nullopt;
+        }
+
+        auto id = resourceNumber;
+        if (type == IconType::Cube || type == IconType::Ball) id = resourceNumber + 1;
+        if (id <= 0) return std::nullopt;
+        return IconFrameTarget { type, id };
     }
-    return false;
+    return std::nullopt;
+}
+
+void clearActiveIconOverrideCache(bool ready = false) {
+    sActiveIconOverrideKeys.clear();
+    sActiveAppliedRoot.reset();
+    sActiveIconOverrideCacheReady = ready;
+    clearLoadedIconSheetCache();
+}
+
+void rebuildActiveIconOverrideCache(PackSummary const& pack) {
+    clearActiveIconOverrideCache();
+    auto appliedRoot = appliedResourcesDir(pack);
+    auto iconsRoot = appliedRoot / "icons";
+    std::error_code ec;
+
+    if (fs::exists(iconsRoot, ec)) {
+        for (
+            auto it = fs::directory_iterator(iconsRoot, fs::directory_options::skip_permission_denied, ec);
+            it != fs::directory_iterator();
+            it.increment(ec)
+        ) {
+            if (ec) break;
+            if (!it->is_regular_file(ec)) continue;
+            if (lowerString(pathString(it->path().extension())) != ".png") continue;
+
+            if (auto target = iconTargetForSheetStem(pathString(it->path().stem()))) {
+                sActiveIconOverrideKeys.insert(iconOverrideKey(target->type, target->id));
+            }
+        }
+    }
+
+    sActiveAppliedRoot = appliedRoot;
+    sActiveIconOverrideCacheReady = true;
+    log::info(
+        "Texture Forge cached {} active icon override target(s) for '{}'",
+        sActiveIconOverrideKeys.size(),
+        pack.name
+    );
+}
+
+void ensureActiveIconOverrideCache() {
+    if (sActiveIconOverrideCacheReady) return;
+
+    if (auto pack = activeRuntimePack()) {
+        rebuildActiveIconOverrideCache(*pack);
+    }
+    else {
+        clearActiveIconOverrideCache(true);
+    }
+}
+
+bool activePackOverridesIcon(IconType type, int id) {
+    ensureActiveIconOverrideCache();
+    return sActiveIconOverrideKeys.contains(iconOverrideKey(type, id));
 }
 
 bool refreshActiveIconOverride(IconType type, int id) {
     auto prefix = iconPrefixForType(type);
     if (!prefix) return false;
 
-    auto pack = activeRuntimePack();
-    if (!pack) return false;
+    ensureActiveIconOverrideCache();
+    if (!sActiveAppliedRoot || !sActiveIconOverrideKeys.contains(iconOverrideKey(type, id))) return false;
 
     auto number = iconResourceNumberForType(type, id);
     auto logicalPlist = fs::path("icons") / fmt::format("{}_{}.plist", *prefix, iconID(number));
-    auto appliedRoot = appliedResourcesDir(*pack);
+    auto appliedRoot = *sActiveAppliedRoot;
+    if (iconSheetIsLoaded(appliedRoot, logicalPlist)) return true;
 
     std::error_code ec;
     auto hasAnyVariant = false;
@@ -687,6 +801,7 @@ bool refreshActiveIconOverride(IconType type, int id) {
 
     auto status = reloadIconSpriteFramesFromRoot(appliedRoot, &appliedRoot, { logicalPlist });
     auto refreshed = status.iconSheetsSeen && status.iconReloadVerified && status.iconSheetsReloaded > 0;
+    if (refreshed) markIconSheetLoaded(appliedRoot, logicalPlist);
     log::info(
         "Texture Forge active icon refresh {} for {} {} ({} sheet(s) reloaded)",
         refreshed ? "succeeded" : "failed",
@@ -705,6 +820,38 @@ bool refreshIconOverrideForFrameName(std::string const& frameName) {
     if (!activePackOverridesIcon(target->type, target->id)) return false;
 
     return refreshActiveIconOverride(target->type, target->id);
+}
+
+cocos2d::CCTexture2D* loadActiveIconTexture(IconType type, int id) {
+    auto prefix = iconPrefixForType(type);
+    if (!prefix) return nullptr;
+
+    ensureActiveIconOverrideCache();
+    if (!sActiveAppliedRoot || !sActiveIconOverrideKeys.contains(iconOverrideKey(type, id))) return nullptr;
+
+    auto number = iconResourceNumberForType(type, id);
+    auto logicalPlist = fs::path("icons") / fmt::format("{}_{}.plist", *prefix, iconID(number));
+    (void)refreshActiveIconOverride(type, id);
+
+    std::vector<fs::path> candidates { qualityPngFor(logicalPlist) };
+    auto variants = qualityPngVariantsFor(logicalPlist);
+    candidates.insert(candidates.end(), variants.begin(), variants.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+
+    auto* textureCache = CCTextureCache::get();
+    if (!textureCache) return nullptr;
+
+    std::error_code ec;
+    for (auto const& candidate : candidates) {
+        auto physical = *sActiveAppliedRoot / candidate;
+        if (!fs::exists(physical, ec)) continue;
+
+        auto physicalText = normalizedPathString(physical);
+        if (auto* texture = textureCache->addImage(physicalText.c_str(), false)) {
+            return texture;
+        }
+    }
+    return nullptr;
 }
 
 std::string packJson(std::string const& id, std::string const& name) {
@@ -930,6 +1077,7 @@ Result<> mountAppliedPack(PackSummary const& pack, bool reload) {
     GEODE_UNWRAP(installRuntimeTexturePack(pack));
     Mod::get()->setSavedValue("active-pack", pack.id);
     Mod::get()->setSavedValue("active-pack-path", normalizedPathString(pack.path));
+    rebuildActiveIconOverrideCache(pack);
     log::info(
         "Applied Texture Forge pack '{}' from {} ({} file(s), {} png(s), {} plist(s))",
         pack.name,
@@ -1007,6 +1155,7 @@ Result<> resetOverrides(bool reload) {
 
     Mod::get()->setSavedValue("active-pack", std::string());
     Mod::get()->setSavedValue("active-pack-path", std::string());
+    clearActiveIconOverrideCache(true);
     log::info(
         "Reset Texture Forge overrides ({} pack(s), {} file(s), {} png(s), {} plist(s))",
         clearedPacks,

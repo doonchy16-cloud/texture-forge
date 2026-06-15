@@ -83,17 +83,12 @@ $on_mod(Loaded) {
 
 class $modify(TextureForgeGameManager, GameManager) {
     cocos2d::CCTexture2D* loadIcon(int id, int type, int requestID) {
+        auto* baseTexture = GameManager::loadIcon(id, type, requestID);
         auto iconType = static_cast<IconType>(type);
-        auto refreshed = textureforge::refreshActiveIconOverride(iconType, id);
-        if (refreshed) {
-            log::info(
-                "Texture Forge prepared active icon frames before GameManager::loadIcon id={} type={} requestID={}",
-                id,
-                type,
-                requestID
-            );
+        if (auto* texture = textureforge::loadActiveIconTexture(iconType, id)) {
+            return texture;
         }
-        return GameManager::loadIcon(id, type, requestID);
+        return baseTexture;
     }
 };
 
@@ -103,13 +98,10 @@ class $modify(TextureForgeSimplePlayer, SimplePlayer) {
     };
 
     void updatePlayerFrame(int id, IconType type) {
-        auto refreshed = textureforge::refreshActiveIconOverride(type, id);
+        (void)textureforge::refreshActiveIconOverride(type, id);
         SimplePlayer::updatePlayerFrame(id, type);
         m_fields->m_textureForgeExactIcon = textureforge::activePackOverridesIcon(type, id);
         if (m_fields->m_textureForgeExactIcon) {
-            if (refreshed) {
-                log::info("Texture Forge refreshed SimplePlayer frame before assignment id={}", id);
-            }
             forceSimplePlayerTextureColors(this);
         }
     }
@@ -155,11 +147,6 @@ class $modify(TextureForgePlayerObject, PlayerObject) {
         if (currentModeUsesTextureForgeIcon()) {
             forcePlayerObjectTextureColors(this);
         }
-    }
-
-    void update(float dt) {
-        PlayerObject::update(dt);
-        refreshTextureForgeColors();
     }
 
     void setColor(ccColor3B const& color) {
