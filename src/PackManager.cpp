@@ -822,38 +822,6 @@ bool refreshIconOverrideForFrameName(std::string const& frameName) {
     return refreshActiveIconOverride(target->type, target->id);
 }
 
-cocos2d::CCTexture2D* loadActiveIconTexture(IconType type, int id) {
-    auto prefix = iconPrefixForType(type);
-    if (!prefix) return nullptr;
-
-    ensureActiveIconOverrideCache();
-    if (!sActiveAppliedRoot || !sActiveIconOverrideKeys.contains(iconOverrideKey(type, id))) return nullptr;
-
-    auto number = iconResourceNumberForType(type, id);
-    auto logicalPlist = fs::path("icons") / fmt::format("{}_{}.plist", *prefix, iconID(number));
-    (void)refreshActiveIconOverride(type, id);
-
-    std::vector<fs::path> candidates { qualityPngFor(logicalPlist) };
-    auto variants = qualityPngVariantsFor(logicalPlist);
-    candidates.insert(candidates.end(), variants.begin(), variants.end());
-    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
-
-    auto* textureCache = CCTextureCache::get();
-    if (!textureCache) return nullptr;
-
-    std::error_code ec;
-    for (auto const& candidate : candidates) {
-        auto physical = *sActiveAppliedRoot / candidate;
-        if (!fs::exists(physical, ec)) continue;
-
-        auto physicalText = normalizedPathString(physical);
-        if (auto* texture = textureCache->addImage(physicalText.c_str(), false)) {
-            return texture;
-        }
-    }
-    return nullptr;
-}
-
 std::string packJson(std::string const& id, std::string const& name) {
     auto json = matjson::Value::object();
     json["textureforge"] = kPackSchema;
@@ -1049,10 +1017,6 @@ Result<> installRuntimeTexturePack(PackSummary const& pack) {
     if (!fileUtils) return Err("Unable to access Geometry Dash file utilities");
 
     std::vector<std::string> runtimePaths { pathString(appliedRoot) };
-    std::error_code ec;
-    if (fs::exists(appliedRoot / "icons", ec)) {
-        runtimePaths.push_back(pathString(appliedRoot / "icons"));
-    }
 
     fileUtils->removeTexturePack(kRuntimePackID);
     fileUtils->addTexturePack(CCTexturePack {

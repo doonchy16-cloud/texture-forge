@@ -2,6 +2,12 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
+## What v0.4.8 does
+
+- Uses the same core loading path as Texture Loader: the active pack's `resources` directory is mounted through Geode's `CCFileUtils::addTexturePack`.
+- Removes Texture Forge's direct `GameManager::loadIcon` hook so icon loading is no longer fighting Geometry Dash or other mods that hook icon selection.
+- Keeps icon replacement as texture/sprite-frame replacement only; applying a pack should not change the player's selected cube, ship, ball, UFO, wave, robot, spider, swing, or jetpack IDs.
+
 ## What v0.4.2 does
 
 - Fixes custom icon apply behavior by clearing the selected icon's Geometry Dash color/glow helper layers before drawing the imported image into the icon's primary frame(s). This makes photo-style imports show as real textures instead of being hidden by the normal player-color mask.
@@ -31,7 +37,7 @@ Source for the `doonc.texture-forge` Geode mod.
 - Mounts the active texture pack first, reloads Geometry Dash textures, then refreshes affected PNG and icon plist/sprite-frame caches from the exact physical pack files.
 - Adds built-in Texture Loader-style plist stacking for non-icon spritesheets, so partial non-icon sheets can fall back through lower packs and vanilla resources without making Texture Loader a dependency.
 - Logs every generated icon PNG/plist pair and every refreshed sprite-frame plist so icon apply problems can be traced in `geode/latest.log`.
-- Mounts the active pack's `resources/icons` folder too, so Geometry Dash icon sheets resolve when the game asks for `player_00.png` instead of `icons/player_00.png`.
+- Mounts the active pack through Geode's texture-pack search path, matching Texture Loader's resource loading model without making Texture Loader a dependency.
 - Shows a success toast after **Apply Pack** so it is clear the click was handled.
 - Clears every pack's applied runtime resources when **Reset All** restores default textures, without removing missing sprite-frame files.
 - Runs as a standalone Geode mod with no Texture Loader dependency.
