@@ -590,6 +590,41 @@ bool activePackOverridesIcon(IconType type, int id) {
     return false;
 }
 
+bool refreshActiveIconOverride(IconType type, int id) {
+    auto prefix = iconPrefixForType(type);
+    if (!prefix) return false;
+
+    auto pack = activeRuntimePack();
+    if (!pack) return false;
+
+    auto number = iconResourceNumberForType(type, id);
+    auto logicalPlist = fs::path("icons") / fmt::format("{}_{}.plist", *prefix, iconID(number));
+    auto appliedRoot = appliedResourcesDir(*pack);
+
+    std::error_code ec;
+    auto hasAnyVariant = false;
+    for (auto const& plist : qualityPlistVariantsFor(logicalPlist)) {
+        auto png = plist;
+        png.replace_extension(".png");
+        if (fs::exists(appliedRoot / plist, ec) && fs::exists(appliedRoot / png, ec)) {
+            hasAnyVariant = true;
+            break;
+        }
+    }
+    if (!hasAnyVariant) return false;
+
+    auto status = reloadIconSpriteFramesFromRoot(appliedRoot, &appliedRoot, { logicalPlist });
+    auto refreshed = status.iconSheetsSeen && status.iconReloadVerified && status.iconSheetsReloaded > 0;
+    log::info(
+        "Texture Forge active icon refresh {} for {} {} ({} sheet(s) reloaded)",
+        refreshed ? "succeeded" : "failed",
+        *prefix,
+        id,
+        status.iconSheetsReloaded
+    );
+    return refreshed;
+}
+
 std::string packJson(std::string const& id, std::string const& name) {
     auto json = matjson::Value::object();
     json["textureforge"] = kPackSchema;

@@ -16,6 +16,7 @@ Result<> applyPack(PackSummary const& pack, bool reload);
 Result<> resetOverrides(bool reload);
 bool lastApplyHadIconReloadWarnings();
 bool activePackOverridesIcon(IconType type, int id);
+bool refreshActiveIconOverride(IconType type, int id);
 void applySavedPackIfAny();
 
 } // namespace textureforge

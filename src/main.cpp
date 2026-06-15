@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/binding/GameManager.hpp>
+#include <Geode/modify/GameManager.hpp>
 #include <Geode/modify/MoreVideoOptionsLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/SimplePlayer.hpp>
@@ -80,15 +81,37 @@ $on_mod(Loaded) {
     textureforge::applySavedPackIfAny();
 }
 
+class $modify(TextureForgeGameManager, GameManager) {
+    cocos2d::CCTexture2D* loadIcon(int id, int type, int requestID) {
+        auto* texture = GameManager::loadIcon(id, type, requestID);
+        auto iconType = static_cast<IconType>(type);
+        if (texture) texture->retain();
+        if (textureforge::refreshActiveIconOverride(iconType, id)) {
+            log::info(
+                "Texture Forge reapplied active icon frames after GameManager::loadIcon id={} type={} requestID={}",
+                id,
+                type,
+                requestID
+            );
+        }
+        if (texture) texture->autorelease();
+        return texture;
+    }
+};
+
 class $modify(TextureForgeSimplePlayer, SimplePlayer) {
     struct Fields {
         bool m_textureForgeExactIcon = false;
     };
 
     void updatePlayerFrame(int id, IconType type) {
+        auto refreshed = textureforge::refreshActiveIconOverride(type, id);
         SimplePlayer::updatePlayerFrame(id, type);
         m_fields->m_textureForgeExactIcon = textureforge::activePackOverridesIcon(type, id);
         if (m_fields->m_textureForgeExactIcon) {
+            if (refreshed) {
+                log::info("Texture Forge refreshed SimplePlayer frame before assignment id={}", id);
+            }
             forceSimplePlayerTextureColors(this);
         }
     }
@@ -152,42 +175,49 @@ class $modify(TextureForgePlayerObject, PlayerObject) {
     }
 
     void updatePlayerFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Cube, frame);
         PlayerObject::updatePlayerFrame(frame);
         m_fields->m_cubeTextureForge = textureforge::activePackOverridesIcon(IconType::Cube, frame);
         refreshTextureForgeColors();
     }
 
     void updatePlayerShipFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Ship, frame);
         PlayerObject::updatePlayerShipFrame(frame);
         m_fields->m_shipTextureForge = textureforge::activePackOverridesIcon(IconType::Ship, frame);
         refreshTextureForgeColors();
     }
 
     void updatePlayerRollFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Ball, frame);
         PlayerObject::updatePlayerRollFrame(frame);
         m_fields->m_ballTextureForge = textureforge::activePackOverridesIcon(IconType::Ball, frame);
         refreshTextureForgeColors();
     }
 
     void updatePlayerBirdFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Ufo, frame);
         PlayerObject::updatePlayerBirdFrame(frame);
         m_fields->m_ufoTextureForge = textureforge::activePackOverridesIcon(IconType::Ufo, frame);
         refreshTextureForgeColors();
     }
 
     void updatePlayerDartFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Wave, frame);
         PlayerObject::updatePlayerDartFrame(frame);
         m_fields->m_waveTextureForge = textureforge::activePackOverridesIcon(IconType::Wave, frame);
         refreshTextureForgeColors();
     }
 
     void updatePlayerSwingFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Swing, frame);
         PlayerObject::updatePlayerSwingFrame(frame);
         m_fields->m_swingTextureForge = textureforge::activePackOverridesIcon(IconType::Swing, frame);
         refreshTextureForgeColors();
     }
 
     void updatePlayerJetpackFrame(int frame) {
+        (void)textureforge::refreshActiveIconOverride(IconType::Jetpack, frame);
         PlayerObject::updatePlayerJetpackFrame(frame);
         m_fields->m_jetpackTextureForge = textureforge::activePackOverridesIcon(IconType::Jetpack, frame);
         refreshTextureForgeColors();
