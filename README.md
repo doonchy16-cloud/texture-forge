@@ -2,6 +2,10 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
+## What v0.4.11 does
+
+- Forces Texture Forge icon sprite frames back into Geometry Dash's sprite-frame cache when `GameManager::loadIcon` serves an active custom icon. This fixes the case where Geometry Dash's original icon loader reloads vanilla frames immediately before Texture Forge returns the custom texture.
+
 ## What v0.4.10 does
 
 - Fixes the runtime icon lookup order for zero-based Geometry Dash icon sheets. Applying to **Cube 1** now prefers `player_00`, **Cube 2** prefers `player_01`, and ball icons follow the same mapping instead of accidentally loading the next icon when multiple cube/ball sheets exist in the same pack.

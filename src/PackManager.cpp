@@ -878,11 +878,12 @@ cocos2d::CCTexture2D* loadActiveIconTexture(IconType type, int id) {
         }
         if (!hasAnyVariant && !hasOverrideKey) continue;
 
-        if (!iconSheetIsLoaded(*sActiveAppliedRoot, logicalPlist)) {
-            auto status = reloadIconSpriteFramesFromRoot(*sActiveAppliedRoot, sActiveAppliedRoot ? &*sActiveAppliedRoot : nullptr, { logicalPlist });
-            if (status.iconSheetsSeen && status.iconReloadVerified && status.iconSheetsReloaded > 0) {
-                markIconSheetLoaded(*sActiveAppliedRoot, logicalPlist);
-            }
+        // GameManager::loadIcon has usually just run before this function is
+        // called. That vanilla load can put the stock frames back into the
+        // sprite-frame cache, so always restore the active pack's frames here.
+        auto status = reloadIconSpriteFramesFromRoot(*sActiveAppliedRoot, sActiveAppliedRoot ? &*sActiveAppliedRoot : nullptr, { logicalPlist });
+        if (status.iconSheetsSeen && status.iconReloadVerified && status.iconSheetsReloaded > 0) {
+            markIconSheetLoaded(*sActiveAppliedRoot, logicalPlist);
         }
 
         std::vector<fs::path> candidates { qualityPngFor(logicalPlist) };
