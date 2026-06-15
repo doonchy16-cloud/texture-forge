@@ -2,6 +2,10 @@
 
 Source for the `doonc.texture-forge` Geode mod.
 
+## What v0.4.10 does
+
+- Fixes the runtime icon lookup order for zero-based Geometry Dash icon sheets. Applying to **Cube 1** now prefers `player_00`, **Cube 2** prefers `player_01`, and ball icons follow the same mapping instead of accidentally loading the next icon when multiple cube/ball sheets exist in the same pack.
+
 ## What v0.4.9 does
 
 - Adds a narrow `GameManager::loadIcon` bridge for icon sheets after the active pack is mounted. It still resolves through Geode's texture-pack search path, but now returns the custom icon texture when Geometry Dash asks for the icon sheet.

@@ -837,11 +837,11 @@ std::vector<int> iconResourceNumberCandidatesForLoadIcon(IconType type, int id) 
         }
     };
 
-    // GameManager::loadIcon often receives the raw resource sheet number. Cubes
-    // and balls are displayed as one-based in game but stored as player_00,
-    // player_ball_00, etc., so also try the friendly in-game mapping.
-    add(id);
+    // Prefer the same friendly in-game mapping used by the target catalog. This
+    // keeps "Cube 1" on player_00 instead of accidentally choosing player_01
+    // when both sheets exist in the active pack.
     add(iconResourceNumberForType(type, id));
+    add(id);
     if (type == IconType::Cube || type == IconType::Ball) {
         add(id - 1);
         add(id + 1);
