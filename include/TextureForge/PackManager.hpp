@@ -17,6 +17,8 @@ Result<> resetOverrides(bool reload);
 bool lastApplyHadIconReloadWarnings();
 bool activePackOverridesIcon(IconType type, int id);
 bool refreshActiveIconOverride(IconType type, int id);
+bool refreshIconOverrideForFrameName(std::string const& frameName);
+bool iconFrameReloadInProgress();
 void applySavedPackIfAny();
 
 } // namespace textureforge

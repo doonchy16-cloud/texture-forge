@@ -1,6 +1,8 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/CCSpriteFrameCache.hpp>
 
+#include "TextureForge/PackManager.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -223,5 +225,14 @@ class $modify(TextureForgeRuntimePlistLoader, CCSpriteFrameCache) {
             m_pLoadedFileNames->erase(gd::string(plistText.c_str()));
             CCSpriteFrameCache::addSpriteFramesWithFile(plist);
         }
+    }
+
+    CCSpriteFrame* spriteFrameByName(char const* name) {
+        if (name && *name && !textureforge::iconFrameReloadInProgress()) {
+            if (textureforge::refreshIconOverrideForFrameName(name)) {
+                log::debug("Texture Forge refreshed active icon sheet before sprite frame lookup {}", name);
+            }
+        }
+        return CCSpriteFrameCache::spriteFrameByName(name);
     }
 };

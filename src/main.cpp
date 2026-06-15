@@ -83,19 +83,17 @@ $on_mod(Loaded) {
 
 class $modify(TextureForgeGameManager, GameManager) {
     cocos2d::CCTexture2D* loadIcon(int id, int type, int requestID) {
-        auto* texture = GameManager::loadIcon(id, type, requestID);
         auto iconType = static_cast<IconType>(type);
-        if (texture) texture->retain();
-        if (textureforge::refreshActiveIconOverride(iconType, id)) {
+        auto refreshed = textureforge::refreshActiveIconOverride(iconType, id);
+        if (refreshed) {
             log::info(
-                "Texture Forge reapplied active icon frames after GameManager::loadIcon id={} type={} requestID={}",
+                "Texture Forge prepared active icon frames before GameManager::loadIcon id={} type={} requestID={}",
                 id,
                 type,
                 requestID
             );
         }
-        if (texture) texture->autorelease();
-        return texture;
+        return GameManager::loadIcon(id, type, requestID);
     }
 };
 

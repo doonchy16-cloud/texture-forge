@@ -348,6 +348,10 @@ Result<IconSheetLayout> readIconSheetLayout(fs::path const& output) {
     return Ok(IconSheetLayout { width, height, originalPng, originalPlist, frames.primaryFrames, frames.clearFrames });
 }
 
+std::vector<IntRect> const& replacementFrames(IconSheetLayout const& layout) {
+    return layout.clearFrames.empty() ? layout.primaryFrames : layout.clearFrames;
+}
+
 void clearFrame(
     std::vector<unsigned char>& destination,
     int destinationWidth,
@@ -456,7 +460,8 @@ Result<bool> writeIconTextureIfPossible(fs::path const& source, fs::path const& 
     for (auto const& frame : layout.clearFrames) {
         clearFrame(sheet, layout.width, layout.height, frame);
     }
-    for (auto const& frame : layout.primaryFrames) {
+    auto const& imageFrames = replacementFrames(layout);
+    for (auto const& frame : imageFrames) {
         blitFittedImage(sourceImage.rgba.data(), sourceImage.width, sourceImage.height, sheet, layout.width, layout.height, frame, false);
     }
 
@@ -470,9 +475,10 @@ Result<bool> writeIconTextureIfPossible(fs::path const& source, fs::path const& 
     fs::copy_file(layout.plistPath, destinationPlist, fs::copy_options::overwrite_existing, ec);
     if (ec) return Err("Unable to copy icon plist: {}", ec.message());
     log::info(
-        "Generated Texture Forge icon sheet {} and plist {} ({} image frame(s), {} cleared layer frame(s))",
+        "Generated Texture Forge icon sheet {} and plist {} ({} replacement frame(s), {} primary frame(s), {} cleared layer frame(s))",
         normalizedPathString(destination),
         normalizedPathString(destinationPlist),
+        imageFrames.size(),
         layout.primaryFrames.size(),
         layout.clearFrames.size()
     );
@@ -513,7 +519,8 @@ Result<int> normalizeIconOutputsInRoot(fs::path const& root) {
         for (auto const& frame : layout.clearFrames) {
             clearFrame(normalizedPixels, layout.width, layout.height, frame);
         }
-        for (auto const& frame : layout.primaryFrames) {
+        auto const& imageFrames = replacementFrames(layout);
+        for (auto const& frame : imageFrames) {
             copyFrame(originalPixels, layout.width, layout.height, normalizedPixels, layout.width, layout.height, frame);
         }
 

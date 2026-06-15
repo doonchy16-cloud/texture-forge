@@ -1,6 +1,8 @@
 #include "TextureForge/PackManager.hpp"
 #include "TextureForge/ImageProcessor.hpp"
 
+#include <string_view>
+
 namespace textureforge {
 
 std::vector<fs::path> relativeFilesIn(fs::path const& root, std::string const& extension = "") {
@@ -62,6 +64,23 @@ struct RuntimeRefreshStatus {
 };
 
 bool sLastApplyHadIconReloadWarnings = false;
+bool sIconFrameReloadInProgress = false;
+
+struct IconFrameReloadGuard {
+    bool m_previous = false;
+
+    IconFrameReloadGuard() : m_previous(sIconFrameReloadInProgress) {
+        sIconFrameReloadInProgress = true;
+    }
+
+    ~IconFrameReloadGuard() {
+        sIconFrameReloadInProgress = m_previous;
+    }
+};
+
+bool iconFrameReloadInProgress() {
+    return sIconFrameReloadInProgress;
+}
 
 std::string textureQualitySuffix() {
     auto* director = CCDirector::get();
@@ -265,6 +284,7 @@ RuntimeRefreshStatus reloadIconSpriteFramesFromRoot(
     fs::path const* expectedAppliedRoot,
     std::vector<fs::path> const& affectedPlists
 ) {
+    IconFrameReloadGuard reloadGuard;
     RuntimeRefreshStatus status;
     auto* frameCache = CCSpriteFrameCache::get();
     auto* textureCache = CCTextureCache::get();
@@ -568,6 +588,58 @@ std::optional<std::string> iconPrefixForType(IconType type) {
     }
 }
 
+struct IconFrameTarget {
+    IconType type;
+    int id = 0;
+};
+
+std::optional<IconFrameTarget> iconTargetForFrameName(std::string frameName) {
+    frameName = lowerString(std::move(frameName));
+    if (!endsWith(frameName, ".png")) return std::nullopt;
+
+    auto const mappings = std::array<std::pair<std::string_view, IconType>, 9> {
+        std::pair { "player_ball", IconType::Ball },
+        std::pair { "jetpack", IconType::Jetpack },
+        std::pair { "player", IconType::Cube },
+        std::pair { "spider", IconType::Spider },
+        std::pair { "robot", IconType::Robot },
+        std::pair { "swing", IconType::Swing },
+        std::pair { "ship", IconType::Ship },
+        std::pair { "bird", IconType::Ufo },
+        std::pair { "dart", IconType::Wave },
+    };
+
+    for (auto const& [prefix, type] : mappings) {
+        auto prefixText = std::string(prefix) + "_";
+        if (!startsWith(frameName, prefixText)) continue;
+
+        auto rest = frameName.substr(prefixText.size());
+        auto separator = rest.find('_');
+        if (separator == std::string::npos || separator == 0) return std::nullopt;
+
+        auto numberText = rest.substr(0, separator);
+        if (!std::all_of(numberText.begin(), numberText.end(), [](unsigned char c) {
+            return std::isdigit(c);
+        })) {
+            return std::nullopt;
+        }
+
+        auto resourceNumber = 0;
+        try {
+            resourceNumber = std::stoi(numberText);
+        }
+        catch (...) {
+            return std::nullopt;
+        }
+
+        auto id = resourceNumber;
+        if (type == IconType::Cube || type == IconType::Ball) id = resourceNumber + 1;
+        if (id <= 0) return std::nullopt;
+        return IconFrameTarget { type, id };
+    }
+    return std::nullopt;
+}
+
 int iconResourceNumberForType(IconType type, int id) {
     if (type == IconType::Cube || type == IconType::Ball) return std::max(0, id - 1);
     return std::max(1, id);
@@ -623,6 +695,16 @@ bool refreshActiveIconOverride(IconType type, int id) {
         status.iconSheetsReloaded
     );
     return refreshed;
+}
+
+bool refreshIconOverrideForFrameName(std::string const& frameName) {
+    if (iconFrameReloadInProgress()) return false;
+
+    auto target = iconTargetForFrameName(frameName);
+    if (!target) return false;
+    if (!activePackOverridesIcon(target->type, target->id)) return false;
+
+    return refreshActiveIconOverride(target->type, target->id);
 }
 
 std::string packJson(std::string const& id, std::string const& name) {
@@ -770,6 +852,7 @@ Result<> deleteStagedOverride(PackSummary const& pack, fs::path const& relative)
 Result<int> importSelectedFileIntoPack(PackSummary const& pack, TargetPreset const& target, fs::path const& source, bool removeImageBackground) {
     if (!fs::exists(source)) return Err("Selected file no longer exists");
     if (!isSupportedImport(source)) return Err("Unsupported file type");
+    if (target.outputs.empty()) return Err("Selected target has no output textures");
 
     auto sourceCopyName = uniqueDestination(pack.path / "sources" / source.filename()).filename();
     auto sourceCopy = pack.path / "sources" / sourceCopyName;
@@ -779,13 +862,36 @@ Result<int> importSelectedFileIntoPack(PackSummary const& pack, TargetPreset con
     if (ec) return Err("Unable to copy source into pack: {}", ec.message());
 
     if (!isImageImport(sourceCopy)) return Err("This target needs an image");
+    log::info(
+        "Texture Forge staging '{}' into pack '{}' target '{}' with {} output(s), background={}",
+        normalizedPathString(sourceCopy),
+        pack.name,
+        target.label,
+        target.outputs.size(),
+        removeImageBackground ? "transparent" : "kept"
+    );
+
     auto count = 0;
     for (auto const& output : target.outputs) {
         auto destination = stagedResourcesDir(pack) / output;
         GEODE_UNWRAP(writeTextureOutput(sourceCopy, destination, output, removeImageBackground));
+        if (!fs::exists(destination, ec)) {
+            return Err("Staged output was not written: {}", genericPathString(output));
+        }
+        auto bytes = fs::file_size(destination, ec);
+        if (ec || bytes == 0) {
+            return Err("Staged output is empty: {}", genericPathString(output));
+        }
+        log::info(
+            "Texture Forge staged output {} -> {} ({} bytes)",
+            genericPathString(output),
+            normalizedPathString(destination),
+            bytes
+        );
         ++count;
     }
     GEODE_UNWRAP(markStagedDirty(pack));
+    log::info("Texture Forge staged target '{}' in '{}' with {} output file(s)", target.label, pack.name, count);
     return Ok(count);
 }
 

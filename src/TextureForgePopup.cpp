@@ -412,7 +412,17 @@ protected:
             showTargets();
             return;
         }
-        toast(fmt::format("Staged {}", activeTarget().label), NotificationIcon::Success);
+        auto stagedCount = result.unwrap();
+        if (stagedCount <= 0) {
+            toast("No texture output was staged", NotificationIcon::Error);
+            showTargets();
+            return;
+        }
+        auto stagedLabel = activeTarget().label;
+        m_pendingFile.reset();
+        m_pendingRemoveBackground = false;
+        refreshPacks();
+        toast(fmt::format("Staged {}", stagedLabel), NotificationIcon::Success);
         showApply();
     }
 
@@ -728,7 +738,12 @@ public:
                     toast(result.unwrapErr(), NotificationIcon::Error);
                     return;
                 }
-                m_pendingFile = savedFile;
+                auto stagedCount = result.unwrap();
+                if (stagedCount <= 0) {
+                    toast("No editor output was staged", NotificationIcon::Error);
+                    return;
+                }
+                m_pendingFile.reset();
                 m_pendingRemoveBackground = false;
                 m_editorTargetMode = false;
                 toast(fmt::format("Staged editor PNG for {}", selectedTarget.label), NotificationIcon::Success);
